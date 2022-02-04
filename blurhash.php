@@ -80,7 +80,7 @@ function wp_blurhash_tag_add_adjust( $filtered_image, $context, $attachment_id )
 		$style = sprintf( 'onload="this.style.removeProperty(\'background\');" style="background-size: cover; background-image: url(data:image/png;base64,%s)"',  base64_encode( file_get_contents( $blurhash.'.png'  ) ) );
 		unlink( $blurhash.'.png' );
 		$filtered_image = str_replace( '<img ', '<img ' . $style, $filtered_image );
-		$filtered_image= str_replace( '.png', 'XXXX' . $style, $filtered_image );
+//		$filtered_image= str_replace( '.png', 'XXXX' . $style, $filtered_image );
 	}
 
 	return $filtered_image;
