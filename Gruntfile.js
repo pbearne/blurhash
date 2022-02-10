@@ -32,7 +32,7 @@ module.exports = function( grunt ) {
 				options: {
 					domainPath: '/languages',
 					exclude: [ '\.git/*', 'bin/*', 'node_modules/*', 'tests/*' ],
-					mainFile: 'blurhash.php',
+					mainFile: 'wp-blurhash.php',
 					potFilename: 'blurhash.pot',
 					potHeaders: {
 						poedit: true,
