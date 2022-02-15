@@ -17,177 +17,272 @@ require_once 'vendor/autoload.php';
 
 use kornrunner\Blurhash\Blurhash;
 
-add_filter( 'wp_generate_attachment_metadata', 'wp_generate_blurhash_metadata', 10, 2 );
-add_action(  'wp_print_scripts', 'wp_blurhash_print_scripts' );
-
-// do we have new filter or are duplicating core the functions?
-if( has_filter( 'wp_img_tag_add_adjust' ) ) {
-	add_filter( 'wp_img_tag_add_adjust', 'wp_blurhash_tag_add_adjust', 10, 3 );
-} else {
-	add_filter( 'the_content', 'wp_blurhash_filter_content_tags' );
-	add_filter( 'wp_blurhash_img_tag_add_adjust', 'wp_blurhash_tag_add_adjust', 10, 3 );
-}
-
-
-
-
-function wp_blurhash_wp_get_attachment_image( $html, $attachment_id ) {
-	$image_meta = wp_get_attachment_metadata( $attachment_id );
-	if ( ! empty( $image_meta['blurhash'] ) ) {
-		$html = str_replace( '<img', '<img data-blurhash="' . $image_meta['blurhash'] . '"', $html );
-	}
-
-	return $html;
-}
-
-// TODO: off-load this to api call
-function wp_generate_blurhash_metadata( $metadata, $attachment_id ) {
-
-	//try for thumbnail first
-	$file   = ( wp_get_attachment_thumb_file( $attachment_id ) ) ?  wp_get_attachment_thumb_file( $attachment_id ) : get_attached_file( $attachment_id );
-	$image  = imagecreatefromstring( file_get_contents( $file ) );
-	$width  = imagesx( $image );
-	$height = imagesy( $image );
-
-	$pixels = [];
-	for ( $y = 0; $y < $height; ++ $y ) {
-		$row = [];
-		for ( $x = 0; $x < $width; ++ $x ) {
-			$index  = imagecolorat( $image, $x, $y );
-			$colors = imagecolorsforindex( $image, $index );
-
-			$row[] = [ $colors['red'], $colors['green'], $colors['blue'] ];
-		}
-		$pixels[] = $row;
-	}
-
-	$components_x         = 4;
-	$components_y         = 3;
-	$blurhash             = Blurhash::encode( $pixels, $components_x, $components_y );
-	$metadata['blurhash'] = $blurhash;
-
-	return $metadata;
-}
-
-function wp_get_blurhash_image_attributes( $attr, $attachment ) {
-	if ( isset( $attachment->blurhash ) ) {
-		$attr['style'] = $attachment->blurhash;
-	}
-
-	return $attr;
-}
-
 /**
- * @param $filtered_image
- * @param $context
- * @param $attachment_id
+ * Add Blurhash preload support to WordPress.
  *
- * @return array|mixed|string|string[]
- *
- * TODO: replace data-blus has
+ * TODO: Add settings to turn on and select method used client-side bg image or canvas.
+ * TODO: Add settings to turn on per image in media library.
+ * TODO: remove direct calls to GD li / support imagick.
+ *       Look at the load function in these files src/wp-includes/class-wp-image-editor.php and src/wp-includes/class-wp-image-editor-imagick.php
+ * TODO: add webp GD support.
+ * TODO: Add tests
  */
-function wp_blurhash_tag_add_adjust( $filtered_image, $context, $attachment_id ) {
+class wp_blurhash {
 
-	$image_meta = wp_get_attachment_metadata( $attachment_id );
 
-	if ( isset( $image_meta['blurhash'] ) ) {
-		$data = sprintf( 'data-blurhash=%s ',  $image_meta['blurhash'] );
+	public function __construct() {
 
-		$filtered_image = str_replace( '<img ', '<img ' . $data, $filtered_image );
+		add_filter( 'wp_generate_attachment_metadata', [ $this, 'blurhash_metadata' ], 10, 2 );
+		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_plugin_scripts' ] );
+		add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
+
+		// do we have the new filter or are duplicating core the functions?
+		if ( has_filter( 'wp_img_tag_add_adjust' ) ) {
+			add_filter( 'wp_img_tag_add_adjust', [ $this, 'tag_add_adjust' ], 10, 3 );
+		} else {
+			add_filter( 'the_content', [ $this, 'filter_content_tags' ] );
+			add_filter( 'wp_blurhash_img_tag_add_adjust', [ $this, 'tag_add_adjust' ], 10, 3 );
+		}
 	}
 
-	return $filtered_image;
-}
+	/**
+	 * TODO: this needs to wired up to so that attachment_image have the data hash added
+	 *
+	 * @param $html
+	 * @param $attachment_id
+	 *
+	 * @return string
+	 */
 
-function wp_blurhash_print_scripts(){
-	?>
-<script type="module" >
+	public function wp_blurhash_wp_get_attachment_image( $html, $attachment_id ) {
+		$image_meta = wp_get_attachment_metadata( $attachment_id );
+		if ( ! empty( $image_meta['blurhash'] ) ) {
+			$html = str_replace( '<img', '<img data-blurhash="' . $image_meta['blurhash'] . '"', $html );
+		}
 
-</script>
-<?php
-}
-
-
-function wp_blurhash_enqueue_plugin_scripts() {
-	wp_enqueue_script('blurhash', plugin_dir_url(__FILE__) . 'dist/blurhash.js');
-}
-add_action( 'wp_enqueue_scripts', 'wp_blurhash_enqueue_plugin_scripts' );
-
-
-function wp_blurhash_filter_content_tags( $content, $context = null ) {
-	if ( null === $context ) {
-		$context = current_filter();
+		return $html;
 	}
 
-	$add_img_loading_attr    = wp_lazy_loading_enabled( 'img', $context );
-	$add_iframe_loading_attr = wp_lazy_loading_enabled( 'iframe', $context );
 
-	if ( ! preg_match_all( '/<(img|iframe)\s[^>]+>/', $content, $matches, PREG_SET_ORDER ) ) {
+	/**
+	 * @return void
+	 */
+	public function register_rest_routes() {
+		$d = register_rest_route( 'blurhash/v1', '/get/(?P<id>\d+)', array(
+			'methods' => WP_REST_Server::READABLE,
+			'callback' => [ $this, 'handle_rest_call' ],
+			'permission_callback' => [ $this, 'rest_permission_callback' ],
+		) );
+
+	}
+
+	/**
+	 * @return bool
+	 */
+	// TDOD: fix permission check
+	public function rest_permission_callback() {
+
+		return true;
+		return current_user_can( 'upload_files' );
+	}
+
+	public function handle_rest_call( $request ) {
+		$id = $request->get_param( 'id' );
+
+		return $this>get_blusghash_by_id( $id );
+	}
+
+	public function get_blusghash_by_id( $id ) {
+			$file   = get_attached_file( $id );
+
+		$image  = imagecreatefromstring( file_get_contents( $file ) );
+		$width  = imagesx( $image );
+		$height = imagesy( $image );
+
+		// we may be able to remove this by call wp_raise_memory_limit( 'image' ); for the GD path
+		// we get timeout for large images
+		$skip_factor = (int) ( $width + $height ) / 100;
+
+		$pixels = [];
+		for ( $y = 0; $y < $height; $y=$y+$skip_factor ) {
+			$row = [];
+			for ( $x = 0; $x < $width; $x=$x+$skip_factor ) {
+				$index  = imagecolorat( $image, $x, $y );
+				$colors = imagecolorsforindex( $image, $index );
+
+				$row[] = [ $colors['red'], $colors['green'], $colors['blue'] ];
+			}
+			$pixels[] = $row;
+		}
+
+		$components_x         = 4;
+		$components_y         = 3;
+
+		return Blurhash::encode( $pixels, $components_x, $components_y );
+	}
+
+	// TODO: off-load this to api call
+	/**
+	 * @param $metadata
+	 * @param $attachment_id
+	 *
+	 * @return array $metadata
+	 */
+	public function blurhash_metadata( $metadata, $attachment_id ) {
+		// this is failing when calling local host but works in browser
+		// $burhash = wp_remote_get( get_rest_url() . 'blurhash/v1/get' . $attachment_id );
+		// so calling directly for now
+		$burhash = $this->get_blusghash_by_id( $attachment_id );
+
+		if( ! empty( $burhash ) ) {
+			$metadata['blurhash'] = $burhash;
+		}
+
+		return $metadata;
+	}
+
+	/**
+	 * @param $filtered_image
+	 * @param $context
+	 * @param $attachment_id
+	 *
+	 * @return string image tag
+	 */
+	public function tag_add_adjust( $filtered_image, $context, $attachment_id ) {
+
+		$image_meta = wp_get_attachment_metadata( $attachment_id );
+
+		if ( isset( $image_meta['blurhash'] ) ) {
+			$data = sprintf( 'data-blurhash=%s ', $image_meta['blurhash'] );
+
+			$filtered_image = str_replace( '<img ', '<img ' . $data, $filtered_image );
+		}
+
+		return $filtered_image;
+	}
+
+
+	/**
+	 * @return void
+	 */
+	public function enqueue_plugin_scripts() {
+		wp_enqueue_script( 'blurhash', plugin_dir_url( __FILE__ ) . 'dist/blurhash.js' );
+	}
+
+	/**
+	 * @param $content
+	 * @param $context
+	 *
+	 * @return string content
+	 */
+	public function filter_content_tags( $content, $context = null ) {
+		if ( null === $context ) {
+			$context = current_filter();
+		}
+
+		if ( ! preg_match_all( '/<(img|iframe)\s[^>]+>/', $content, $matches, PREG_SET_ORDER ) ) {
+			return $content;
+		}
+
+		// List of the unique `img` tags found in $content.
+		$images = array();
+
+		// List of the unique `iframe` tags found in $content.
+		$iframes = array();
+
+		foreach ( $matches as $match ) {
+			list( $tag, $tag_name ) = $match;
+
+			switch ( $tag_name ) {
+				case 'img':
+					if ( preg_match( '/wp-image-([0-9]+)/i', $tag, $class_id ) ) {
+						$attachment_id = absint( $class_id[1] );
+
+						if ( $attachment_id ) {
+							// If exactly the same image tag is used more than once, overwrite it.
+							// All identical tags will be replaced later with 'str_replace()'.
+							$images[ $tag ] = $attachment_id;
+							break;
+						}
+					}
+					$images[ $tag ] = 0;
+					break;
+			}
+		}
+
+		// Reduce the array to unique attachment IDs.
+		$attachment_ids = array_unique( array_filter( array_values( $images ) ) );
+
+		if ( count( $attachment_ids ) > 1 ) {
+			/*
+			 * Warm the object cache with post and meta information for all found
+			 * images to avoid making individual database calls.
+			 */
+			_prime_post_caches( $attachment_ids, false, true );
+		}
+
+		// Iterate through the matches in order of occurrence as it is relevant for whether or not to lazy-load.
+		foreach ( $matches as $match ) {
+			// Filter an image match.
+			if ( isset( $images[ $match[0] ] ) ) {
+				$filtered_image = $match[0];
+				$attachment_id  = $images[ $match[0] ];
+				/**
+				 * Filters img tag that will be injected into the content.
+				 *
+				 * @param string $filtered_image the img tag with attributes being created that will
+				 *                                    replace the source img tag in the content.
+				 * @param string $context Optional. Additional context to pass to the filters.
+				 *                        Defaults to `current_filter()` when not set.
+				 * @param int $attachment_id the ID of the image attachment.
+				 *
+				 * @since 1.0.0
+				 *
+				 */
+				$filtered_image = apply_filters( 'wp_blurhash_img_tag_add_adjust', $filtered_image, $context, $attachment_id );
+
+				if ( $filtered_image !== $match[0] ) {
+					$content = str_replace( $match[0], $filtered_image, $content );
+				}
+			}
+		}
+
 		return $content;
 	}
 
-	// List of the unique `img` tags found in $content.
-	$images = array();
+	/**
+	 * @param $attachment_id
+	 *
+	 * @return false|mixed
+	 */
+	private function get_smallest_image_file( $attachment_id ) {
+		$metadata = wp_get_attachment_metadata( $attachment_id );
 
-	// List of the unique `iframe` tags found in $content.
-	$iframes = array();
-
-	foreach ( $matches as $match ) {
-		list( $tag, $tag_name ) = $match;
-
-		switch ( $tag_name ) {
-			case 'img':
-				if ( preg_match( '/wp-image-([0-9]+)/i', $tag, $class_id ) ) {
-					$attachment_id = absint( $class_id[1] );
-
-					if ( $attachment_id ) {
-						// If exactly the same image tag is used more than once, overwrite it.
-						// All identical tags will be replaced later with 'str_replace()'.
-						$images[ $tag ] = $attachment_id;
-						break;
-					}
-				}
-				$images[ $tag ] = 0;
-				break;
+		if ( ! isset( $metadata['sizes'] ) ) {
+			return false;
 		}
-	}
 
-	// Reduce the array to unique attachment IDs.
-	$attachment_ids = array_unique( array_filter( array_values( $images ) ) );
+		$sizes = $metadata['sizes'];
 
-	if ( count( $attachment_ids ) > 1 ) {
-		/*
-		 * Warm the object cache with post and meta information for all found
-		 * images to avoid making individual database calls.
-		 */
-		_prime_post_caches( $attachment_ids, false, true );
-	}
+		$smallest_size = false;
+		foreach ( $sizes as $size ) {
+			if ( ! $smallest_size ) {
+				$smallest_size = $size;
+				continue;
+			}
+			// we don't what the croped versions
+			if( true === $size['crop'] ){
+				continue;
+			}
 
-	// Iterate through the matches in order of occurrence as it is relevant for whether or not to lazy-load.
-	foreach ( $matches as $match ) {
-		// Filter an image match.
-		if ( isset( $images[ $match[0] ] ) ) {
-			$filtered_image = $match[0];
-			$attachment_id  = $images[ $match[0] ];
-		/**
-			 * Filters img tag that will be injected into the content.
-			 *
-			 * @since 6.0.0
-			 *
-			 * @param string $filtered_image  the img tag with attributes being created that will
-			 * 									replace the source img tag in the content.
-			 * @param string $context Optional. Additional context to pass to the filters.
-			 *                        Defaults to `current_filter()` when not set.
-			 * @param int    $attachment_id the ID of the image attachment.
-			 */
-			$filtered_image = apply_filters( 'wp_blurhash_img_tag_add_adjust', $filtered_image, $context, $attachment_id );
-
-			if ( $filtered_image !== $match[0] ) {
-				$content = str_replace( $match[0], $filtered_image, $content );
+			if ( $size['width'] * $size['height'] < $smallest_size['width'] * $smallest_size['height'] ) {
+				$smallest_size = $size;
 			}
 		}
-	}
 
-	return $content;
+		return $smallest_size;
+	}
 }
+
+new WP_Blurhash();
 
