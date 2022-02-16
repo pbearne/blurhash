@@ -89,7 +89,7 @@ class wp_blurhash {
 	public function handle_rest_call( $request ) {
 		$id = $request->get_param( 'id' );
 
-		return $this>get_blusghash_by_id( $id );
+		return $this->get_blusghash_by_id( $id );
 	}
 
 	public function get_blusghash_by_id( $id ) {
