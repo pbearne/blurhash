@@ -153,7 +153,7 @@ class wp_blurhash {
 		$image_meta = wp_get_attachment_metadata( $attachment_id );
 
 		if ( isset( $image_meta['blurhash'] ) ) {
-			$data = sprintf( 'data-blurhash=%s ', $image_meta['blurhash'] );
+			$data = sprintf( 'data-blurhash="%s" ', $image_meta['blurhash'] );
 
 			$filtered_image = str_replace( '<img ', '<img ' . $data, $filtered_image );
 		}
