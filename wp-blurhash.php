@@ -89,10 +89,10 @@ class wp_blurhash {
 	public function handle_rest_call( $request ) {
 		$id = $request->get_param( 'id' );
 
-		return $this->get_blusghash_by_id( $id );
+		return $this->get_blurhash_by_id( $id );
 	}
 
-	public function get_blusghash_by_id( $id ) {
+	public function get_blurhash_by_id( $id ) {
 			$file   = get_attached_file( $id );
 
 		$image  = imagecreatefromstring( file_get_contents( $file ) );
@@ -132,7 +132,7 @@ class wp_blurhash {
 		// this is failing when calling local host but works in browser
 		// $burhash = wp_remote_get( get_rest_url() . 'blurhash/v1/get' . $attachment_id );
 		// so calling directly for now
-		$burhash = $this->get_blusghash_by_id( $attachment_id );
+		$burhash = $this->get_blurhash_by_id( $attachment_id );
 
 		if( ! empty( $burhash ) ) {
 			$metadata['blurhash'] = $burhash;
