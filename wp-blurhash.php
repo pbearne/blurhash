@@ -153,6 +153,11 @@ class wp_blurhash {
 	 */
 	public function tag_add_adjust( $filtered_image, $context, $attachment_id ) {
 
+		$blurhash_setting = get_post_meta( $attachment_id, 'blurhash', true );
+		if ( ! $blurhash_setting ) {
+			return $filtered_image;
+		}
+
 		$image_meta = wp_get_attachment_metadata( $attachment_id );
 
 		if ( isset( $image_meta['blurhash'] ) ) {
