@@ -268,7 +268,7 @@ class wp_blurhash {
 			name='attachments[{$post->ID}][blurhash]' id='attachments[{$post->ID}][blurhash]' />";
 
 		$form_fields['blurhash'] = array(
-			'label' => __( 'Enable Blurhash',  'wp-blurhash' ),
+			'label' => __( 'Blurhash',  'wp-blurhash' ),
 			'input' => 'html',
 			'html'  => $html_input,
 		);
