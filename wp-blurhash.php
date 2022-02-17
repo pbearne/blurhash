@@ -21,7 +21,6 @@ use kornrunner\Blurhash\Blurhash;
  * Add Blurhash preload support to WordPress.
  *
  * TODO: Add settings to turn on and select method used client-side bg image or canvas.
- * TODO: Add settings to turn on per image in media library.
  * TODO: remove direct calls to GD li / support imagick.
  *       Look at the load function in these files src/wp-includes/class-wp-image-editor.php and src/wp-includes/class-wp-image-editor-imagick.php
  * TODO: add webp GD support.
