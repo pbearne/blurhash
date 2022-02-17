@@ -43,6 +43,9 @@ class wp_blurhash {
 			add_filter( 'the_content', [ $this, 'filter_content_tags' ] );
 			add_filter( 'wp_blurhash_img_tag_add_adjust', [ $this, 'tag_add_adjust' ], 10, 3 );
 		}
+
+		add_filter( 'attachment_fields_to_edit', [ $this, 'add_blurhash_media_setting' ], 10, 2 );
+		add_filter( 'attachment_fields_to_save', [ $this, 'save_blurhash_media_setting' ], 10, 2);
 	}
 
 	/**
@@ -248,6 +251,43 @@ class wp_blurhash {
 		}
 
 		return $content;
+	}
+
+	/**
+	 * Add checkbox setting to enable/disable blurhash for a given media.
+	 *
+	 * @param array $form_fields
+	 * @param WP_Post $post
+	 *
+	 * @return array
+	 */
+	public function add_blurhash_media_setting( array $form_fields, WP_Post $post ) {
+		$value        = get_post_meta( $post->ID, 'blurhash', true );
+		$checked_text = $value ? 'checked' : '';
+		$html_input   = "<input type='checkbox' $checked_text value='1'
+			name='attachments[{$post->ID}][blurhash]' id='attachments[{$post->ID}][blurhash]' />";
+
+		$form_fields['blurhash'] = array(
+			'label' => __( 'Enable Blurhash',  'wp-blurhash' ),
+			'input' => 'html',
+			'html'  => $html_input,
+		);
+
+		return $form_fields;
+	}
+
+	/**
+	 * Save blurhash setting value for a media post.
+	 *
+	 * @param array $post
+	 * @param array $attachment
+	 *
+	 * @return array
+	 */
+	public function save_blurhash_media_setting( array $post, array $attachment ) {
+		update_post_meta( $post['ID'], 'blurhash', isset( $attachment['blurhash'] ) ? '1' : '0' );
+
+		return $post;
 	}
 
 	/**
