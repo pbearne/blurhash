@@ -268,7 +268,7 @@ class wp_blurhash {
 	 */
 	public function add_blurhash_media_setting( array $form_fields, WP_Post $post ) {
 		$value        = get_post_meta( $post->ID, 'blurhash', true );
-		$checked_text = $value ? 'checked' : '';
+		$checked_text = $value !== '0' ? 'checked' : '';
 		$html_input   = "<input type='checkbox' $checked_text value='1'
 			name='attachments[{$post->ID}][blurhash]' id='attachments[{$post->ID}][blurhash]' />";
 
