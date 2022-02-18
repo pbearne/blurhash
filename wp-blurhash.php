@@ -152,11 +152,6 @@ class wp_blurhash {
 	 */
 	public function tag_add_adjust( $filtered_image, $context, $attachment_id ) {
 
-		$blurhash_setting = get_post_meta( $attachment_id, 'blurhash', true );
-		if ( ! $blurhash_setting ) {
-			return $filtered_image;
-		}
-
 		$image_meta = wp_get_attachment_metadata( $attachment_id );
 
 		if ( isset( $image_meta['blurhash'] ) ) {
@@ -266,8 +261,8 @@ class wp_blurhash {
 	 * @return array
 	 */
 	public function add_blurhash_media_setting( array $form_fields, WP_Post $post ) {
-		$value        = get_post_meta( $post->ID, 'blurhash', true );
-		$checked_text = $value !== '0' ? 'checked' : '';
+		$image_meta   = wp_get_attachment_metadata( $post->ID );
+		$checked_text = isset( $image_meta['blurhash'] ) ? 'checked' : '';
 		$html_input   = "<input type='checkbox' $checked_text value='1'
 			name='attachments[{$post->ID}][blurhash]' id='attachments[{$post->ID}][blurhash]' />";
 
@@ -289,7 +284,20 @@ class wp_blurhash {
 	 * @return array
 	 */
 	public function save_blurhash_media_setting( array $post, array $attachment ) {
-		update_post_meta( $post['ID'], 'blurhash', isset( $attachment['blurhash'] ) ? '1' : '0' );
+		$attachment_id = $post['ID'];
+		$image_meta    = wp_get_attachment_metadata( $attachment_id );
+
+		if ( isset( $attachment['blurhash'] ) ) {
+			if ( ! isset( $image_meta['blurhash'] ) ) {
+				// If enabling blurhash from media setting and image meta doesn't have any, generate a new one.
+				$image_meta = $this->blurhash_metadata( $image_meta, $attachment_id );
+				wp_update_attachment_metadata( $attachment_id, $image_meta );
+			}
+		} elseif ( isset( $image_meta['blurhash'] ) ) {
+			// If disabling blurhash from media setting and blurhash set in image meta, unset it.
+			unset( $image_meta['blurhash'] );
+			wp_update_attachment_metadata( $attachment_id, $image_meta );
+		}
 
 		return $post;
 	}
