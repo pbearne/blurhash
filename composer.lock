@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "efa2bd45c0063314e54bfdffd611f4d3",
+    "content-hash": "65ed5763ce0a0e8a290df8e3365dd77c",
     "packages": [
         {
             "name": "kornrunner/blurhash",
@@ -56,7 +56,9 @@
     "stability-flags": [],
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
+    "platform": {
+        "ext-gd": "*"
+    },
     "platform-dev": [],
     "plugin-api-version": "1.1.0"
 }
