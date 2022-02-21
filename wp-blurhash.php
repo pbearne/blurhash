@@ -21,7 +21,6 @@ use kornrunner\Blurhash\Blurhash;
  * Add Blurhash preload support to WordPress.
  *
  * TODO: Add settings to turn on and select method used client-side bg image or canvas.
- * TODO: Add settings to turn on per image in media library.
  * TODO: remove direct calls to GD li / support imagick.
  *       Look at the load function in these files src/wp-includes/class-wp-image-editor.php and src/wp-includes/class-wp-image-editor-imagick.php
  * TODO: add webp GD support.
@@ -43,6 +42,9 @@ class wp_blurhash {
 			add_filter( 'the_content', [ $this, 'filter_content_tags' ] );
 			add_filter( 'wp_blurhash_img_tag_add_adjust', [ $this, 'tag_add_adjust' ], 10, 3 );
 		}
+
+		add_filter( 'attachment_fields_to_edit', [ $this, 'add_blurhash_media_setting' ], 10, 2 );
+		add_filter( 'attachment_fields_to_save', [ $this, 'save_blurhash_media_setting' ], 10, 2);
 	}
 
 	/**
@@ -248,6 +250,56 @@ class wp_blurhash {
 		}
 
 		return $content;
+	}
+
+	/**
+	 * Add checkbox setting to enable/disable blurhash for a given media.
+	 *
+	 * @param array $form_fields
+	 * @param WP_Post $post
+	 *
+	 * @return array
+	 */
+	public function add_blurhash_media_setting( array $form_fields, WP_Post $post ) {
+		$image_meta   = wp_get_attachment_metadata( $post->ID );
+		$checked_text = isset( $image_meta['blurhash'] ) ? 'checked' : '';
+		$html_input   = "<input type='checkbox' $checked_text value='1'
+			name='attachments[{$post->ID}][blurhash]' id='attachments[{$post->ID}][blurhash]' />";
+
+		$form_fields['blurhash'] = array(
+			'label' => __( 'Blurhash',  'wp-blurhash' ),
+			'input' => 'html',
+			'html'  => $html_input,
+		);
+
+		return $form_fields;
+	}
+
+	/**
+	 * Save blurhash setting value for a media post.
+	 *
+	 * @param array $post
+	 * @param array $attachment
+	 *
+	 * @return array
+	 */
+	public function save_blurhash_media_setting( array $post, array $attachment ) {
+		$attachment_id = $post['ID'];
+		$image_meta    = wp_get_attachment_metadata( $attachment_id );
+
+		if ( isset( $attachment['blurhash'] ) ) {
+			if ( ! isset( $image_meta['blurhash'] ) ) {
+				// If enabling blurhash from media setting and image meta doesn't have any, generate a new one.
+				$image_meta = $this->blurhash_metadata( $image_meta, $attachment_id );
+				wp_update_attachment_metadata( $attachment_id, $image_meta );
+			}
+		} elseif ( isset( $image_meta['blurhash'] ) ) {
+			// If disabling blurhash from media setting and blurhash set in image meta, unset it.
+			unset( $image_meta['blurhash'] );
+			wp_update_attachment_metadata( $attachment_id, $image_meta );
+		}
+
+		return $post;
 	}
 
 	/**
