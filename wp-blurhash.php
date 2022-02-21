@@ -332,38 +332,6 @@ class wp_blurhash {
 		return $post;
 	}
 
-	/**
-	 * @param $attachment_id
-	 *
-	 * @return false|mixed
-	 */
-	private function get_smallest_image_file( $attachment_id ) {
-		$metadata = wp_get_attachment_metadata( $attachment_id );
-
-		if ( ! isset( $metadata['sizes'] ) ) {
-			return false;
-		}
-
-		$sizes = $metadata['sizes'];
-
-		$smallest_size = false;
-		foreach ( $sizes as $size ) {
-			if ( ! $smallest_size ) {
-				$smallest_size = $size;
-				continue;
-			}
-			// we don't what the croped versions
-			if( true === $size['crop'] ){
-				continue;
-			}
-
-			if ( $size['width'] * $size['height'] < $smallest_size['width'] * $smallest_size['height'] ) {
-				$smallest_size = $size;
-			}
-		}
-
-		return $smallest_size;
-	}
 }
 
 new WP_Blurhash();
