@@ -95,31 +95,57 @@ class wp_blurhash {
 
 	public function get_blurhash_by_id( $id ) {
 		$file = get_attached_file( $id );
+		wp_raise_memory_limit( 'image' );
 
-		if ( function_exists( 'imagecreatefromwebp' ) && 'image/webp' === wp_get_image_mime( $file ) ) {
-			$image = imagecreatefromwebp( $file );
-		} else {
-			$image = imagecreatefromstring( file_get_contents( $file ) );
+		$image_editor = wp_get_image_editor( $file );
+
+		if ( is_wp_error( $image_editor ) ) {
+			// This image cannot be edited.
+			return;
 		}
 
-		$width  = imagesx( $image );
-		$height = imagesy( $image );
-
-		// we may be able to remove this by call wp_raise_memory_limit( 'image' ); for the GD path
-		// we get timeout for large images
-		$skip_factor = (int) ( $width + $height ) / 100;
+		$size = $image_editor->get_size();
+		$width = $size['width'];
+		$height = $size['height'];
+		$skip_factor = (int) ( $width + $height ) / 10;
 
 		$pixels = [];
-		for ( $y = 0; $y < $height; $y=$y+$skip_factor ) {
-			$row = [];
-			for ( $x = 0; $x < $width; $x=$x+$skip_factor ) {
-				$index  = imagecolorat( $image, $x, $y );
-				$colors = imagecolorsforindex( $image, $index );
-
-				$row[] = [ $colors['red'], $colors['green'], $colors['blue'] ];
+		if ( 'WP_Image_Editor_Imagick' === get_class( $image_editor ) ) {
+			//TODO: create imagick version of blurhash
+			$imagick = new Imagick($file);
+			for ( $y = 0; $y < $height; $y=$y+$skip_factor ) {
+				$row = [];
+				for ( $x = 0; $x < $width; $x=$x+$skip_factor ) {
+					$pixel  = $imagick->getImagePixelColor( $x, $y );
+					$colors = $pixel->getColor();
+					$row[] = [ $colors['r'], $colors['g'], $colors['b'] ];
+				}
+				$pixels[] = $row;
 			}
-			$pixels[] = $row;
+		} else {
+			if ( function_exists( 'imagecreatefromwebp' ) && 'image/webp' === wp_get_image_mime( $file ) ) {
+				$image = imagecreatefromwebp( $file );
+			} else {
+				$image = imagecreatefromstring( file_get_contents( $file ) );
+			}
+
+			for ( $y = 0; $y < $height; $y=$y+$skip_factor ) {
+				$row = [];
+				for ( $x = 0; $x < $width; $x=$x+$skip_factor ) {
+					$index  = imagecolorat( $image, $x, $y );
+					$colors = imagecolorsforindex( $image, $index );
+
+					$row[] = [ $colors['red'], $colors['green'], $colors['blue'] ];
+				}
+				$pixels[] = $row;
+			}
 		}
+
+
+
+
+
+
 
 		$components_x         = 4;
 		$components_y         = 3;
