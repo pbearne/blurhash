@@ -23,7 +23,6 @@ use kornrunner\Blurhash\Blurhash;
  * TODO: Add settings to turn on and select method used client-side bg image or canvas.
  * TODO: remove direct calls to GD li / support imagick.
  *       Look at the load function in these files src/wp-includes/class-wp-image-editor.php and src/wp-includes/class-wp-image-editor-imagick.php
- * TODO: add webp GD support.
  * TODO: Add tests
  */
 class wp_blurhash {
@@ -95,9 +94,14 @@ class wp_blurhash {
 	}
 
 	public function get_blurhash_by_id( $id ) {
-			$file   = get_attached_file( $id );
+		$file = get_attached_file( $id );
 
-		$image  = imagecreatefromstring( file_get_contents( $file ) );
+		if ( function_exists( 'imagecreatefromwebp' ) && 'image/webp' === wp_get_image_mime( $file ) ) {
+			$image = imagecreatefromwebp( $file );
+		} else {
+			$image = imagecreatefromstring( file_get_contents( $file ) );
+		}
+
 		$width  = imagesx( $image );
 		$height = imagesy( $image );
 
