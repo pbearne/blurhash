@@ -31,6 +31,7 @@ class wp_blurhash {
 	public function __construct() {
 
 		add_filter( 'wp_generate_attachment_metadata', [ $this, 'blurhash_metadata' ], 10, 2 );
+		add_filter( 'wp_update_attachment_metadata', [ $this, 'blurhash_metadata' ], 10, 2 );
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_plugin_scripts' ] );
 		add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
 
