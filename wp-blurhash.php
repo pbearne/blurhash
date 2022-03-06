@@ -26,12 +26,15 @@ use kornrunner\Blurhash\Blurhash;
  * TODO: Add tests
  */
 class wp_blurhash {
-
-
 	public function __construct() {
 
 		add_filter( 'wp_generate_attachment_metadata', [ $this, 'blurhash_metadata' ], 10, 2 );
 		add_filter( 'wp_update_attachment_metadata', [ $this, 'blurhash_metadata' ], 10, 2 );
+		
+		//re-generate on thumbnail changes.
+		add_action( 'add_attachment', [$this,"regenerate_attachment_metadata"] );
+		add_action( 'edit_attachment', [$this,"regenerate_attachment_metadata"] );
+		
 		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_plugin_scripts' ] );
 		add_action( 'rest_api_init', [ $this, 'register_rest_routes' ] );
 
@@ -45,6 +48,10 @@ class wp_blurhash {
 
 		add_filter( 'attachment_fields_to_edit', [ $this, 'add_blurhash_media_setting' ], 10, 2 );
 		add_filter( 'attachment_fields_to_save', [ $this, 'save_blurhash_media_setting' ], 10, 2);
+	}
+	
+	public function regenerate_attachment_metadata( $post_id ) {
+		wp_update_attachment_metadata($post_id,wp_get_attachment_metadata($post_id));
 	}
 
 	/**
