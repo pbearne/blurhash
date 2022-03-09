@@ -226,6 +226,15 @@
     			images[i].onload = function(){
     				images[i].style.backgroundImage = ``;
     			};
+    			const div = document.createElement('div');
+    			div.style.height = `${h}px`;
+    			div.style.width = `${w}px`;
+    			div.style.backgroundImage = `url(${bgImage})`;
+    			div.style.backgroundRepeat = 'no-repeat';
+    			div.style.backgroundPosition = 'center';
+    			div.style.backgroundSize = 'cover';
+
+    			images[i].parentNode.append(div);
     		}
     	}
     });
